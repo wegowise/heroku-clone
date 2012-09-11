@@ -6,13 +6,13 @@ module Heroku::Command
       old_app = app
       puts "Cloning #{old_app}"
 
-      old_stack = heroku.info(old_app)[:stack]
+      old_stack = api.get_app(old_app).body['stack']
 
       step "creating application"
 
-      name = extract_option("--name")
+      new_app = extract_option("--name")
 
-      new_app = heroku.create(new_app, :stack => old_stack, :name => name)
+      api.post_app(:stack => old_stack, :name => new_app)
       step "new app: #{new_app}", 2
 
       step "cloning addons"
@@ -31,13 +31,13 @@ module Heroku::Command
   private ######################################################################
 
     def clone_addons(old_app, new_app)
-      old_addons = heroku.installed_addons(old_app).map { |a| a["name"] }
-      current_addons = heroku.installed_addons(new_app).map { |a| a["name"] }
+      old_addons = api.get_addons(old_app).body.map { |a| a["name"] }
+      current_addons = api.get_addons(new_app).body.map { |a| a["name"] }
 
       (old_addons - current_addons).each do |addon|
         step "installing #{addon}", 2
         begin
-          heroku.install_addon(new_app, addon)
+          api.post_addon(new_app, addon)
         rescue Exception => e
           print "* could not install #{addon}: #{e.message}"
         end
@@ -45,8 +45,8 @@ module Heroku::Command
     end
 
     def clone_configuration(old_app, new_app)
-      old_config = heroku.config_vars(old_app)
-      heroku.add_config_vars(new_app, old_config)
+      old_config = api.get_config_vars(old_app).body
+      api.put_config_vars(new_app, old_config)
       old_config.keys.sort.each { |key| step(key, 2) }
     end
 
@@ -64,11 +64,11 @@ module Heroku::Command
     end
 
     def clone_collaborators(old_app, new_app)
-      old_collabs = heroku.list_collaborators(old_app).map { |c| c[:email] }
-      new_collabs = heroku.list_collaborators(new_app).map { |c| c[:email] }
+      old_collabs = api.get_collaborators(old_app).body.map { |c| c['email'] }
+      new_collabs = api.get_collaborators(new_app).body.map { |c| c['email'] }
       (old_collabs - new_collabs).each do |collab|
         step "adding #{collab}", 2
-        heroku.add_collaborator(new_app, collab)
+        api.post_collaborator(new_app, collab)
       end
     end
 
